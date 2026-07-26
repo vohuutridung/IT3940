@@ -1,0 +1,3 @@
+- input: 60000 32x32 colour images in 100 classes
+- output: 100-class distribution
+

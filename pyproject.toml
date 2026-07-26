@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "IT3940"
+version = "0.1.0"
+description = "Empirical study of teacher confidence in knowledge distillation"
+requires-python = ">=3.10"
+dependencies = [
+    "torch",
+    "torchvision",
+    "datasets"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
