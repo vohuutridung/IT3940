@@ -41,6 +41,7 @@ def download_checkpoint(
         repo_id=repo_id,
         filename=filename,
         revision=revision,
+        token=os.getenv("HUGGINGFACE_TOKEN"),
     )
     return Path(downloaded_path)
     
