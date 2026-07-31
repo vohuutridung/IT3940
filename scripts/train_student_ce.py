@@ -22,7 +22,7 @@ def set_seed(seed: int) -> None:
 def main() -> None:
     # 1. Hyperparameters
     seed = 42
-    batch_size = 128
+    batch_size = 512
     num_epochs = 240
 
     learning_rate = 0.01
@@ -95,7 +95,7 @@ def main() -> None:
         scheduler.step()
         current_lr = optimizer.param_groups[0]['lr']
 
-        print(f"Epoch {epoch}/{num_epochs}, LR: {current_lr:.6f}, Train Loss: {train_metrics['loss']:.4f}, Train Accuracy: {train_metrics['accuracy']:.4f}, Test Loss: {val_metrics['loss']:.4f}, Test Accuracy: {val_metrics['accuracy']:.4f}")
+        print(f"Epoch {epoch}/{num_epochs}, LR: {current_lr:.6f}, Train Loss: {train_metrics['loss']:.4f}, Train Accuracy: {train_metrics['accuracy']:.4f}, Validation Loss: {val_metrics['loss']:.4f}, Validation Accuracy: {val_metrics['accuracy']:.4f}")
 
         if val_metrics['accuracy'] > best_accuracy:
             best_accuracy = val_metrics['accuracy']

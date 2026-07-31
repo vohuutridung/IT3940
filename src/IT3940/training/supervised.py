@@ -1,8 +1,27 @@
 from torch.utils.data import DataLoader
 import torch
+import torch.distributed as dist
 import torch.nn as nn
 from torch.optim import Optimizer
-from pathlib import Path
+
+
+def _reduce_sums(
+    total_loss: float,
+    total_correct: float,
+    total_samples: float,
+    device: torch.device,
+) -> tuple[float, float, float]:
+    """Sum loss/correct/samples across DDP ranks when distributed is active."""
+    if not (dist.is_available() and dist.is_initialized()):
+        return total_loss, total_correct, total_samples
+
+    totals = torch.tensor(
+        [total_loss, total_correct, total_samples],
+        dtype=torch.float64,
+        device=device,
+    )
+    dist.all_reduce(totals, op=dist.ReduceOp.SUM)
+    return totals[0].item(), totals[1].item(), totals[2].item()
 
 
 def train_one_epoch(
@@ -19,9 +38,9 @@ def train_one_epoch(
     total_correct = 0
     total_samples = 0
 
-    for batch in dataloader: # dataloader is a iterable
-        images = batch['images'].to(device)
-        labels = batch['labels'].to(device)
+    for batch in dataloader:
+        images = batch["images"].to(device, non_blocking=True)
+        labels = batch["labels"].to(device, non_blocking=True)
 
         optimizer.zero_grad() # delete gradients from previous epoch
         logits = model(images) # forward
@@ -33,13 +52,14 @@ def train_one_epoch(
         total_loss += loss.item() * batch_size
         total_correct += (logits.argmax(dim=1) == labels).sum().item()
         total_samples += batch_size
-    
-    epoch_loss = total_loss / total_samples
-    epoch_accuracy = total_correct / total_samples
+
+    total_loss, total_correct, total_samples = _reduce_sums(
+        total_loss, total_correct, total_samples, device
+    )
 
     return {
-        'loss': epoch_loss,
-        'accuracy': epoch_accuracy,
+        "loss": total_loss / total_samples,
+        "accuracy": total_correct / total_samples,
     }
 
 
@@ -58,21 +78,22 @@ def evaluate(
     total_samples = 0
 
     for batch in dataloader:
-        images = batch['images'].to(device)
-        labels = batch['labels'].to(device)
+        images = batch["images"].to(device, non_blocking=True)
+        labels = batch["labels"].to(device, non_blocking=True)
 
-        logits = model(images) # forward pass
-        loss = criterion(logits, labels) # compute loss
+        logits = model(images)
+        loss = criterion(logits, labels)
 
         batch_size = labels.size(0)
         total_loss += loss.item() * batch_size
         total_correct += (logits.argmax(dim=1) == labels).sum().item()
         total_samples += batch_size
-    
-    eval_loss = total_loss / total_samples
-    eval_accuracy = total_correct / total_samples
+
+    total_loss, total_correct, total_samples = _reduce_sums(
+        total_loss, total_correct, total_samples, device
+    )
 
     return {
-        'loss': eval_loss,
-        'accuracy': eval_accuracy,
+        "loss": total_loss / total_samples,
+        "accuracy": total_correct / total_samples,
     }

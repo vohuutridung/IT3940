@@ -1,15 +1,19 @@
 from datasets import load_dataset
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Sampler
 from torchvision import transforms
+import os
 
 
 CIFAR100_MEAN = (0.5071, 0.4867, 0.4408)
 CIFAR100_STD = (0.2675, 0.2565, 0.2761)
 
+# Cap workers so 2 DDP processes don't oversubscribe the CPU.
+NUM_WORKERS = min(4, max(1, (os.cpu_count() or 1) // 2))
+
 
 class CIFAR100:
     def __init__(
-        self, 
+        self,
         id: str = "uoft-cs/cifar100",
         val_ratio: float = 0.1,
         seed: int = 42,
@@ -50,26 +54,51 @@ class CIFAR100:
             "labels": batch["fine_label"],
         }
 
-    def get_train_loader(self, batch_size: int = 128):
+    def get_train_loader(
+        self,
+        batch_size: int = 128,
+        sampler: Sampler | None = None,
+        shuffle: bool | None = None,
+        num_workers: int = NUM_WORKERS,
+    ):
+        if shuffle is None:
+            shuffle = sampler is None
         return DataLoader(
             self.train_dataset,
             batch_size=batch_size,
-            shuffle=True,
+            shuffle=shuffle,
+            sampler=sampler,
+            num_workers=num_workers,
+            pin_memory=True,
         )
 
-    
-    def get_val_loader(self, batch_size: int = 128):
+    def get_val_loader(
+        self,
+        batch_size: int = 128,
+        sampler: Sampler | None = None,
+        num_workers: int = NUM_WORKERS,
+    ):
         return DataLoader(
             self.val_dataset,
             batch_size=batch_size,
             shuffle=False,
+            sampler=sampler,
+            num_workers=num_workers,
+            pin_memory=True,
         )
 
-
-    def get_test_loader(self, batch_size: int = 128):
+    def get_test_loader(
+        self,
+        batch_size: int = 128,
+        sampler: Sampler | None = None,
+        num_workers: int = NUM_WORKERS,
+    ):
         return DataLoader(
             self.test_dataset,
             batch_size=batch_size,
             shuffle=False,
+            sampler=sampler,
+            num_workers=num_workers,
+            pin_memory=True,
         )
     
