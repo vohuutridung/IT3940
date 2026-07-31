@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 from torch.optim import Optimizer
 from pathlib import Path
+from typing import Any
+
 
 def save_checkpoint(
     path: str | Path,
