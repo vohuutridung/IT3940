@@ -22,7 +22,7 @@ def set_seed(seed: int) -> None:
 def main() -> None:
     # 1. Hyperparameters
     seed = 42
-    batch_size = 128
+    batch_size = 512
     num_epochs = 240
 
     learning_rate = 0.01
