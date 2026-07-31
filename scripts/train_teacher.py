@@ -30,6 +30,7 @@ def main() -> None:
     weight_decay = 5e-4
 
     checkpoint_path = "checkpoints/teacher.pt"
+    path_in_repo = "teacher/teacher.pt"
 
     set_seed(seed)
 
@@ -112,7 +113,7 @@ def main() -> None:
     url = upload_checkpoint(
         local_path=checkpoint_path,
         repo_id=repo_id,
-        path_in_repo="teacher/teacher.pt",
+        path_in_repo=path_in_repo,
     )
     print(f"Uploaded checkpoint to {url}")
 

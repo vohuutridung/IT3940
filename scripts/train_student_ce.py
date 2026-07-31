@@ -29,7 +29,9 @@ def main() -> None:
     momentum = 0.9
     weight_decay = 5e-4
 
-    checkpoint_path = "checkpoints/teacher.pt"
+    checkpoint_path = "checkpoints/student_ce.pt"
+    path_in_repo = "student/student_ce.pt"
+
 
     set_seed(seed)
 
@@ -112,7 +114,7 @@ def main() -> None:
     url = upload_checkpoint(
         local_path=checkpoint_path,
         repo_id=repo_id,
-        path_in_repo="teacher/teacher.pt",
+        path_in_repo=path_in_repo,
     )
     print(f"Uploaded checkpoint to {url}")
 
