@@ -25,8 +25,8 @@ def save_checkpoint(
 def load_checkpoint(
     path: str | Path,
     model: nn.Module,
-    optimizer: Optimizer | None = None,
     device: torch.device,
+    optimizer: Optimizer | None = None,
 ) -> dict[str, Any]:
     """Load a model checkpoint from local file."""
     path = Path(path)
