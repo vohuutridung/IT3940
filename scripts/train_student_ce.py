@@ -46,7 +46,7 @@ def main() -> None:
 
 
     # 4. Teacher model
-    model = WideResNet(depth=40, widen_factor=2, num_classes=100,).to(device)
+    model = WideResNet(depth=16, widen_factor=2, num_classes=100,).to(device)
 
 
     # 5. Loss

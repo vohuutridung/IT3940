@@ -1,3 +1,6 @@
 - input: 60000 32x32 colour images in 100 classes
 - output: 100-class distribution
 
+- hf repo: https://huggingface.co/vohuutridung/IT3940
+
+- teacher: wrn-40-2, student: wrn-16-2

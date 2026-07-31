@@ -69,7 +69,7 @@ class CIFAR100:
     def get_test_loader(self, batch_size: int = 128):
         return DataLoader(
             self.test_dataset,
-            batch_size=batch_size
+            batch_size=batch_size,
             shuffle=False,
         )
     

@@ -76,22 +76,3 @@ def evaluate(
         'loss': eval_loss,
         'accuracy': eval_accuracy,
     }
-
-
-def save_checkpoint(
-    path: str | Path,
-    model: nn.Module,
-    optimizer: Optimizer,
-    epoch: int,
-    accuracy: float,
-) -> None:
-    """Save the model checkpoint."""
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    torch.save({
-        "model_state_dict": model.state_dict(),
-        "optimizer_state_dict": optimizer.state_dict(),
-        "epoch": epoch,
-        "accuracy": accuracy,
-    }, path)
