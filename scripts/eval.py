@@ -1,8 +1,14 @@
-"""Evaluate a checkpoint from the Hugging Face Hub on CIFAR-100 test.
+"""Evaluate one HF Hub checkpoint on CIFAR-100 (Top-1 + NLL).
+
+Protocol (proposal): selected checkpoints are evaluated on the official
+test set. Call once per model; derive ΔCE / ΔVKD offline across runs.
 
 Examples:
   python scripts/eval.py --filename teacher/teacher.pt
-  python scripts/eval.py --filename student/student_ce.pt --arch student
+  python scripts/eval.py --filename student/student_ce.pt
+  python scripts/eval.py --filename student/student_vanilla.pt
+  python scripts/eval.py --filename student/student_mcp_weighting_confidence.pt
+  python scripts/eval.py --filename student/student_ce.pt --split val
 """
 
 from __future__ import annotations
@@ -10,11 +16,10 @@ from __future__ import annotations
 import argparse
 
 import torch
-import torch.nn as nn
 
 from IT3940.data.cifar100 import CIFAR100
+from IT3940.evaluation.metrics import evaluate_classification
 from IT3940.models.wrn import WideResNet
-from IT3940.training.supervised import evaluate
 from IT3940.utils.checkpoint import load_checkpoint
 from IT3940.utils.hub import download_checkpoint
 
@@ -26,12 +31,14 @@ ARCHS = {
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Evaluate a HF Hub checkpoint on CIFAR-100 test.")
+    parser = argparse.ArgumentParser(
+        description="Evaluate one HF Hub checkpoint: Top-1 Accuracy and NLL.",
+    )
     parser.add_argument(
         "--filename",
         type=str,
         required=True,
-        help="Path of the file inside the HF repo, e.g. teacher/teacher.pt",
+        help="Path inside the HF repo, e.g. teacher/teacher.pt or student/student_ce.pt",
     )
     parser.add_argument(
         "--repo-id",
@@ -44,9 +51,16 @@ def parse_args() -> argparse.Namespace:
         type=str,
         choices=sorted(ARCHS),
         default=None,
-        help="Model architecture preset (teacher=WRN-40-2, student=WRN-16-2)",
+        help="Architecture preset (teacher=WRN-40-2, student=WRN-16-2). Inferred from path if omitted.",
     )
-    parser.add_argument("--batch-size", type=int, default=512)
+    parser.add_argument(
+        "--split",
+        type=str,
+        choices=["test", "val"],
+        default="test",
+        help="Evaluation split (default: test; val for sanity checks only)",
+    )
+    parser.add_argument("--batch-size", type=int, default=1024)
     return parser.parse_args()
 
 
@@ -54,14 +68,13 @@ def resolve_arch(args: argparse.Namespace) -> tuple[int, int]:
     if args.arch is not None:
         return ARCHS[args.arch]
 
-    # Infer from common HF paths used in this project.
     if args.filename.startswith("teacher/"):
         return ARCHS["teacher"]
     if args.filename.startswith("student/"):
         return ARCHS["student"]
 
     raise SystemExit(
-        "Could not infer architecture. Pass --arch teacher|student "
+        "Could not infer architecture from --filename. Pass --arch teacher|student."
     )
 
 
@@ -74,6 +87,7 @@ def main() -> None:
     print(f"Repo: {args.repo_id}")
     print(f"File: {args.filename}")
     print(f"Model: WRN-{depth}-{widen_factor}")
+    print(f"Split: {args.split}")
 
     checkpoint_path = download_checkpoint(
         repo_id=args.repo_id,
@@ -92,20 +106,27 @@ def main() -> None:
         epoch = checkpoint.get("epoch", "?")
         accuracy = checkpoint.get("accuracy", None)
         acc_str = f"{accuracy:.4f}" if isinstance(accuracy, float) else str(accuracy)
-        print(f"Checkpoint meta: epoch={epoch}, recorded_accuracy={acc_str}")
+        print(f"Checkpoint meta: epoch={epoch}, recorded_val_accuracy={acc_str}")
 
     data = CIFAR100()
-    test_loader = data.get_test_loader(batch_size=args.batch_size)
-    criterion = nn.CrossEntropyLoss()
+    if args.split == "test":
+        loader = data.get_test_loader(batch_size=args.batch_size)
+    else:
+        loader = data.get_val_loader(batch_size=args.batch_size)
 
-    metrics = evaluate(
+    metrics = evaluate_classification(
         model=model,
-        dataloader=test_loader,
-        criterion=criterion,
+        dataloader=loader,
         device=device,
     )
 
-    print(f"CIFAR-100 test — accuracy: {100.0 * metrics['accuracy']:.2f}%")
+    top1 = metrics["accuracy"]
+    nll = metrics["nll"]
+    print(
+        f"CIFAR-100 {args.split} — "
+        f"Top-1: {100.0 * top1:.2f}% ({top1:.4f}), "
+        f"NLL: {nll:.4f}"
+    )
 
 
 if __name__ == "__main__":
