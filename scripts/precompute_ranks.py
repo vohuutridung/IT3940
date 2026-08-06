@@ -58,7 +58,7 @@ def parse_args() -> argparse.Namespace:
         default="all",
         help="Confidence signal to precompute",
     )
-    parser.add_argument("--batch-size", type=int, default=1024)
+    parser.add_argument("--batch-size", type=int, default=2048)
     parser.add_argument("--force", action="store_true", help="Recompute even if cache exists")
     return parser.parse_args()
 
