@@ -123,7 +123,7 @@ def main() -> None:
     top1 = metrics["accuracy"]
     nll = metrics["nll"]
     print(
-        f"CIFAR-100 {args.split} — "
+        f"Model {args.filename} — "
         f"Top-1: {100.0 * top1:.2f}% ({top1:.4f}), "
         f"NLL: {nll:.4f}"
     )
