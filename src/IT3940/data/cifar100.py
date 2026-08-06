@@ -2,6 +2,7 @@ from datasets import load_dataset
 from torch.utils.data import DataLoader, Sampler
 from torchvision import transforms
 import os
+import torch
 
 
 CIFAR100_MEAN = (0.5071, 0.4867, 0.4408)
@@ -19,11 +20,18 @@ class CIFAR100:
         seed: int = 42,
     ):
         self.id = id
+        self.val_ratio = val_ratio
+        self.seed = seed
+
         self.full_train_dataset = load_dataset(id, split="train")
         self.test_dataset = load_dataset(id, split="test")
 
         split_dataset = self.full_train_dataset.train_test_split(test_size=val_ratio, seed=seed)
-        self.train_dataset = split_dataset["train"]
+        indexed_train = split_dataset["train"].add_column(
+            "index",
+            list(range(len(split_dataset["train"]))),
+        )
+        self.train_dataset = indexed_train
         self.val_dataset = split_dataset["test"]
 
         self.train_transform = transforms.Compose([
@@ -39,18 +47,27 @@ class CIFAR100:
 
         # Register lazy transforms: applied on-the-fly whenever samples are fetched
         self.train_dataset.set_transform(self._transform_train_batch)
+        self.train_eval_dataset = indexed_train.with_transform(self._transform_eval_batch)
         self.val_dataset.set_transform(self._transform_test_batch)
         self.test_dataset.set_transform(self._transform_test_batch)
 
     def _transform_train_batch(self, batch):
         return {
-            "images": [self.train_transform(image) for image in batch["img"]],
+            "images": torch.stack([self.train_transform(image) for image in batch["img"]]),
             "labels": batch["fine_label"],
+            "indices": batch["index"],
+        }
+
+    def _transform_eval_batch(self, batch):
+        return {
+            "images": torch.stack([self.test_transform(image) for image in batch["img"]]),
+            "labels": batch["fine_label"],
+            "indices": batch["index"],
         }
 
     def _transform_test_batch(self, batch):
         return {
-            "images": [self.test_transform(image) for image in batch["img"]],
+            "images": torch.stack([self.test_transform(image) for image in batch["img"]]),
             "labels": batch["fine_label"],
         }
 
@@ -68,6 +85,20 @@ class CIFAR100:
             batch_size=batch_size,
             shuffle=shuffle,
             sampler=sampler,
+            num_workers=num_workers,
+            pin_memory=True,
+        )
+
+    def get_train_eval_loader(
+        self,
+        batch_size: int = 256,
+        num_workers: int = NUM_WORKERS,
+    ):
+        """Deterministic train loader for teacher rank precomputation."""
+        return DataLoader(
+            self.train_eval_dataset,
+            batch_size=batch_size,
+            shuffle=False,
             num_workers=num_workers,
             pin_memory=True,
         )
@@ -101,4 +132,3 @@ class CIFAR100:
             num_workers=num_workers,
             pin_memory=True,
         )
-    

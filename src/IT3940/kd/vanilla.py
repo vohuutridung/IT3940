@@ -8,7 +8,7 @@ class VanillaKD(KDObjective):
     def __init__(
         self,
         alpha: float = 0.5,
-        temperature: float = 2.0,
+        temperature: float = 4.0,
     ):
         super().__init__()
         self.alpha = alpha
@@ -20,6 +20,7 @@ class VanillaKD(KDObjective):
         teacher_logits: torch.Tensor,
         student_logits: torch.Tensor,
         labels: torch.Tensor,
+        indices: torch.Tensor | None = None,
     ) -> dict[str, torch.Tensor]:
         """Compute the total, CE, and KD losses."""
         ce_loss = F.cross_entropy(student_logits, labels)

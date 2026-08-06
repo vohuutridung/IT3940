@@ -1,7 +1,7 @@
 """Evaluate a checkpoint from the Hugging Face Hub on CIFAR-100 test.
 
 Examples:
-  python scripts/eval.py --filename teacher/teacher.pt --arch teacher
+  python scripts/eval.py --filename teacher/teacher.pt
   python scripts/eval.py --filename student/student_ce.pt --arch student
 """
 

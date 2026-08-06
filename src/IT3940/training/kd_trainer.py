@@ -4,7 +4,7 @@ from torch import nn
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 
-from src.kd.base import KDObjective
+from IT3940.kd.base import KDObjective
 
 
 class KDTrainer:
@@ -42,8 +42,11 @@ class KDTrainer:
         total_samples = 0
 
         for batch in dataloader:
-            images = batch['images'].to(self.device, non_blocking=True)
-            labels = batch['labels'].to(self.device, non_blocking=True)
+            images = batch["images"].to(self.device, non_blocking=True)
+            labels = batch["labels"].to(self.device, non_blocking=True)
+            indices = batch.get("indices")
+            if indices is not None:
+                indices = indices.to(self.device, non_blocking=True)
 
             batch_size = labels.size(0)
 
@@ -53,11 +56,12 @@ class KDTrainer:
                 teacher_logits = self.teacher(images)
 
             student_logits = self.student(images)
-            
+
             losses = self.objective(
                 teacher_logits=teacher_logits,
                 student_logits=student_logits,
                 labels=labels,
+                indices=indices,
             )
 
             loss = losses['total']
@@ -100,8 +104,11 @@ class KDTrainer:
         total_samples = 0
 
         for batch in dataloader:
-            images = batch['images'].to(self.device, non_blocking=True)
-            labels = batch['labels'].to(self.device, non_blocking=True)
+            images = batch["images"].to(self.device, non_blocking=True)
+            labels = batch["labels"].to(self.device, non_blocking=True)
+            indices = batch.get("indices")
+            if indices is not None:
+                indices = indices.to(self.device, non_blocking=True)
 
             batch_size = labels.size(0)
 
@@ -114,6 +121,7 @@ class KDTrainer:
                 teacher_logits=teacher_logits,
                 student_logits=student_logits,
                 labels=labels,
+                indices=indices,
             )
 
             total_loss += losses['total'].item() * batch_size
