@@ -182,7 +182,7 @@ def main() -> None:
     set_seed(args.seed + local_rank)
     name = run_name(args)
     checkpoint_path = Path("checkpoints") / f"student_kd_{name}.pt"
-    path_in_repo = f"student/{name}.pt"
+    path_in_repo = f"student/student_{name}.pt"
 
     if is_main:
         print(f"Variant: {name}")
