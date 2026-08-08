@@ -90,28 +90,45 @@ Example output:
     --orientation confidence
 ```
 
-### 6. Train the full confidence-aware grid
+### 6. Train all confidence-orientation configurations
 
-This runs 4 signals × 3 mechanisms × 2 orientations = 24 experiments
+This runs 4 signals × 3 mechanisms = 12 confidence-orientation experiments
 sequentially.
 
 ```python
 !set -e; \
 for signal in mcp entropy margin gt_prob; do \
   for mechanism in weighting mixing temperature; do \
-    for orientation in confidence uncertainty; do \
-      torchrun --nproc_per_node=2 scripts/train_kd.py \
-        --variant confidence \
-        --teacher-arch wrn28-10 \
-        --signal "$signal" \
-        --mechanism "$mechanism" \
-        --orientation "$orientation"; \
-    done; \
+    torchrun --nproc_per_node=2 scripts/train_kd.py \
+      --variant confidence \
+      --teacher-arch wrn28-10 \
+      --signal "$signal" \
+      --mechanism "$mechanism" \
+      --orientation confidence; \
   done; \
 done
 ```
 
-### 7. Evaluate uploaded checkpoints
+### 7. Train all uncertainty-orientation configurations
+
+This runs 4 signals × 3 mechanisms = 12 uncertainty-orientation experiments
+sequentially.
+
+```python
+!set -e; \
+for signal in mcp entropy margin gt_prob; do \
+  for mechanism in weighting mixing temperature; do \
+    torchrun --nproc_per_node=2 scripts/train_kd.py \
+      --variant confidence \
+      --teacher-arch wrn28-10 \
+      --signal "$signal" \
+      --mechanism "$mechanism" \
+      --orientation uncertainty; \
+  done; \
+done
+```
+
+### 8. Evaluate uploaded checkpoints
 
 Evaluation is single-process and defaults to the CIFAR-100 test split.
 
