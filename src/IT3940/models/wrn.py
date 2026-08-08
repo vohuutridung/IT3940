@@ -142,6 +142,11 @@ def wrn_40_1(**kwargs):
     return model
 
 
+def wrn_28_10(**kwargs):
+    model = WideResNet(depth=28, widen_factor=10, **kwargs)
+    return model
+
+
 def wrn_16_2(**kwargs):
     model = WideResNet(depth=16, widen_factor=2, **kwargs)
     return model
@@ -150,6 +155,15 @@ def wrn_16_2(**kwargs):
 def wrn_16_1(**kwargs):
     model = WideResNet(depth=16, widen_factor=1, **kwargs)
     return model
+
+
+# Named presets used by train/eval scripts.
+TEACHER_ARCHS: dict[str, tuple[int, int]] = {
+    "wrn28-10": (28, 10),  # second / primary teacher baseline
+    "wrn40-2": (40, 2),    # first teacher baseline
+}
+STUDENT_ARCH_NAME = "wrn16-2"
+STUDENT_ARCH: tuple[int, int] = (16, 2)
 
 
 if __name__ == '__main__':

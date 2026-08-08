@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 import torch
 
 from IT3940.data.cifar100 import CIFAR100
 from IT3940.kd.confidence import ConfidenceSignal
 from IT3940.kd.rank_cache import default_cache_path, get_or_build_rank_store
-from IT3940.models.wrn import WideResNet
+from IT3940.models.wrn import TEACHER_ARCHS, WideResNet
 from IT3940.utils.checkpoint import load_checkpoint
 from IT3940.utils.hub import download_checkpoint
 
@@ -30,20 +31,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--repo-id",
         type=str,
-        default="vohuutridung/IT3940",
+        default="vohuutridung/IT3940_new",
         help="HF repo id when downloading teacher checkpoint",
+    )
+    parser.add_argument(
+        "--teacher-arch",
+        type=str,
+        choices=sorted(TEACHER_ARCHS),
+        default="wrn28-10",
+        help="Teacher architecture (must match the checkpoint)",
     )
     parser.add_argument(
         "--filename",
         type=str,
-        default="teacher/teacher.pt",
-        help="Checkpoint filename inside the HF repo",
-    )
-    parser.add_argument(
-        "--teacher-name",
-        type=str,
-        default="wrn40-2",
-        help="Teacher model name used in the cache folder path",
+        default=None,
+        help="Checkpoint filename inside the HF repo; default teacher/teacher_{arch}.pt",
     )
     parser.add_argument(
         "--cache-dir",
@@ -58,29 +60,60 @@ def parse_args() -> argparse.Namespace:
         default="all",
         help="Confidence signal to precompute",
     )
-    parser.add_argument("--batch-size", type=int, default=2048)
+    parser.add_argument("--batch-size", type=int, default=512)
     parser.add_argument("--force", action="store_true", help="Recompute even if cache exists")
     return parser.parse_args()
 
 
+def resolve_teacher_filename(args: argparse.Namespace) -> str:
+    if args.filename is not None:
+        return args.filename
+    return f"teacher/teacher_{args.teacher_arch}.pt"
+
+
 def resolve_teacher_checkpoint(args: argparse.Namespace) -> str:
+    reference = args.teacher_checkpoint or resolve_teacher_filename(args)
+    if Path(reference).name == "teacher.pt" and args.teacher_arch != "wrn40-2":
+        raise ValueError(
+            "Legacy teacher.pt is WRN-40-2; pass --teacher-arch wrn40-2 "
+            "or use teacher/teacher_wrn28-10.pt."
+        )
+    for arch in TEACHER_ARCHS:
+        if arch != args.teacher_arch and arch in Path(reference).name:
+            raise ValueError(
+                f"Teacher reference {reference!r} indicates {arch}, but "
+                f"--teacher-arch is {args.teacher_arch}."
+            )
+
     if args.teacher_checkpoint is not None:
         return args.teacher_checkpoint
-    return str(download_checkpoint(repo_id=args.repo_id, filename=args.filename))
+    return str(
+        download_checkpoint(
+            repo_id=args.repo_id,
+            filename=resolve_teacher_filename(args),
+        )
+    )
 
 
 def main() -> None:
     args = parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    depth, widen_factor = TEACHER_ARCHS[args.teacher_arch]
 
     teacher_checkpoint = resolve_teacher_checkpoint(args)
     print(f"Using teacher checkpoint: {teacher_checkpoint}")
-    print(f"Teacher name: {args.teacher_name}")
+    print(f"Teacher arch: WRN-{depth}-{widen_factor} ({args.teacher_arch})")
 
-    teacher = WideResNet(depth=40, widen_factor=2, num_classes=100).to(device)
-    load_checkpoint(teacher_checkpoint, model=teacher, device=device)
+    teacher = WideResNet(depth=depth, widen_factor=widen_factor, num_classes=100).to(device)
+    load_checkpoint(
+        teacher_checkpoint,
+        model=teacher,
+        device=device,
+        expected_arch=args.teacher_arch,
+        expected_role="teacher",
+    )
 
-    data = CIFAR100()
+    data = CIFAR100(train_aug="student")
     signals = SIGNALS if args.signal == "all" else [args.signal]
 
     for signal in signals:
@@ -90,7 +123,7 @@ def main() -> None:
             signal=signal,
             device=device,
             teacher_checkpoint=teacher_checkpoint,
-            teacher_name=args.teacher_name,
+            teacher_name=args.teacher_arch,
             dataset_id=data.id,
             val_ratio=data.val_ratio,
             seed=data.seed,

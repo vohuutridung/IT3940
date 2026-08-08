@@ -1,6 +1,144 @@
 - input: 60000 32x32 colour images in 100 classes
 - output: 100-class distribution
 
-- hf repo: https://huggingface.co/vohuutridung/IT3940
+- hf repo: https://huggingface.co/vohuutridung/IT3940_new
 
-- teacher: wrn-40-2, student: wrn-16-2
+- teachers:
+  - wrn-40-2 (baseline #1)
+  - wrn-28-10 (baseline #2, default for new KD runs)
+- student: wrn-16-2
+
+- checkpoint naming:
+  - teacher/teacher_wrn28-10.pt (default teacher)
+  - teacher/teacher_wrn40-2.pt (retrained teacher baseline #1)
+  - teacher/teacher.pt (legacy WRN-40-2; read-only)
+  - student/student_ce_wrn16-2.pt
+  - student/student_kd_{teacher_arch}_{variant}.pt
+  - legacy student paths remain read-only and are never overwritten
+
+- protocol:
+  - global batch 128, lr 0.1, SGD+Nesterov, cosine → 1e-5
+  - teacher: 300 epochs, strong aug (crop+flip+RandAugment+RandomErasing)
+  - student (CE / KD): 240 epochs, weak aug (crop+flip)
+
+## Kaggle run commands
+
+Run from the repository root. All training commands use 2 GPUs, so the
+per-GPU batch is 64 and the global batch is 128.
+
+### 0. Setup
+
+```python
+%cd /kaggle/working/IT3940
+!pip install -q -e .
+
+import os
+from kaggle_secrets import UserSecretsClient
+os.environ["HUGGINGFACE_TOKEN"] = UserSecretsClient().get_secret(
+    "HUGGINGFACE_TOKEN"
+)
+```
+
+### 1. Train and upload the default WRN-28-10 teacher
+
+Uploads to `teacher/teacher_wrn28-10.pt`.
+
+```python
+!torchrun --nproc_per_node=2 scripts/train_teacher.py --arch wrn28-10
+```
+
+### 2. Precompute all confidence ranks
+
+Run this after the teacher has been uploaded. This is a single-process job,
+not a `torchrun` job.
+
+```python
+!python scripts/precompute_ranks.py \
+    --teacher-arch wrn28-10 \
+    --signal all
+```
+
+### 3. Train and upload the CE-only student
+
+Uploads to `student/student_ce_wrn16-2.pt`.
+
+```python
+!torchrun --nproc_per_node=2 scripts/train_student_ce.py
+```
+
+### 4. Train and upload vanilla KD
+
+Uploads to `student/student_kd_wrn28-10_vanilla.pt`.
+
+```python
+!torchrun --nproc_per_node=2 scripts/train_kd.py \
+    --variant vanilla \
+    --teacher-arch wrn28-10
+```
+
+### 5. Train one confidence-aware KD configuration
+
+Example output:
+`student/student_kd_wrn28-10_mcp_weighting_confidence.pt`.
+
+```python
+!torchrun --nproc_per_node=2 scripts/train_kd.py \
+    --variant confidence \
+    --teacher-arch wrn28-10 \
+    --signal mcp \
+    --mechanism weighting \
+    --orientation confidence
+```
+
+### 6. Train the full confidence-aware grid
+
+This runs 4 signals × 3 mechanisms × 2 orientations = 24 experiments
+sequentially.
+
+```python
+!set -e; \
+for signal in mcp entropy margin gt_prob; do \
+  for mechanism in weighting mixing temperature; do \
+    for orientation in confidence uncertainty; do \
+      torchrun --nproc_per_node=2 scripts/train_kd.py \
+        --variant confidence \
+        --teacher-arch wrn28-10 \
+        --signal "$signal" \
+        --mechanism "$mechanism" \
+        --orientation "$orientation"; \
+    done; \
+  done; \
+done
+```
+
+### 7. Evaluate uploaded checkpoints
+
+Evaluation is single-process and defaults to the CIFAR-100 test split.
+
+```python
+!python scripts/eval.py \
+    --filename teacher/teacher_wrn28-10.pt
+
+!python scripts/eval.py \
+    --filename student/student_ce_wrn16-2.pt
+
+!python scripts/eval.py \
+    --filename student/student_kd_wrn28-10_vanilla.pt
+
+!python scripts/eval.py \
+    --filename student/student_kd_wrn28-10_mcp_weighting_confidence.pt
+```
+
+Evaluate the full confidence-aware grid:
+
+```python
+!set -e; \
+for signal in mcp entropy margin gt_prob; do \
+  for mechanism in weighting mixing temperature; do \
+    for orientation in confidence uncertainty; do \
+      python scripts/eval.py \
+        --filename "student/student_kd_wrn28-10_${signal}_${mechanism}_${orientation}.pt"; \
+    done; \
+  done; \
+done
+```

@@ -128,7 +128,14 @@ def metadata_matches(
     cached: RankCacheMetadata,
     expected: RankCacheMetadata,
 ) -> bool:
-    return cached == expected
+    # The checkpoint checksum identifies the weights. Absolute checkpoint paths
+    # differ between local files and Hugging Face cache locations and must not
+    # invalidate an otherwise identical rank cache.
+    cached_values = asdict(cached)
+    expected_values = asdict(expected)
+    cached_values.pop("teacher_checkpoint")
+    expected_values.pop("teacher_checkpoint")
+    return cached_values == expected_values
 
 
 def _as_tensor(value) -> torch.Tensor:

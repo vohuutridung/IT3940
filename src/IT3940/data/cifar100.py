@@ -11,6 +11,28 @@ CIFAR100_STD = (0.2675, 0.2565, 0.2761)
 # Cap workers so 2 DDP processes don't oversubscribe the CPU.
 NUM_WORKERS = min(4, max(1, (os.cpu_count() or 1) // 2))
 
+# Student: fixed weak aug. Teacher: strong aug (RandAugment + RandomErasing).
+STUDENT_TRAIN_TRANSFORM = transforms.Compose([
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize(CIFAR100_MEAN, CIFAR100_STD),
+])
+
+TEACHER_TRAIN_TRANSFORM = transforms.Compose([
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.RandAugment(num_ops=2, magnitude=9),
+    transforms.ToTensor(),
+    transforms.Normalize(CIFAR100_MEAN, CIFAR100_STD),
+    transforms.RandomErasing(p=0.25),
+])
+
+TEST_TRANSFORM = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize(CIFAR100_MEAN, CIFAR100_STD),
+])
+
 
 class CIFAR100:
     def __init__(
@@ -18,10 +40,15 @@ class CIFAR100:
         id: str = "uoft-cs/cifar100",
         val_ratio: float = 0.1,
         seed: int = 42,
+        train_aug: str = "student",
     ):
+        if train_aug not in {"student", "teacher"}:
+            raise ValueError(f"train_aug must be 'student' or 'teacher', got {train_aug!r}")
+
         self.id = id
         self.val_ratio = val_ratio
         self.seed = seed
+        self.train_aug = train_aug
 
         self.full_train_dataset = load_dataset(id, split="train")
         self.test_dataset = load_dataset(id, split="test")
@@ -34,16 +61,10 @@ class CIFAR100:
         self.train_dataset = indexed_train
         self.val_dataset = split_dataset["test"]
 
-        self.train_transform = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(CIFAR100_MEAN, CIFAR100_STD),
-        ])
-        self.test_transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(CIFAR100_MEAN, CIFAR100_STD),
-        ])
+        self.train_transform = (
+            TEACHER_TRAIN_TRANSFORM if train_aug == "teacher" else STUDENT_TRAIN_TRANSFORM
+        )
+        self.test_transform = TEST_TRANSFORM
 
         # Register lazy transforms: applied on-the-fly whenever samples are fetched
         self.train_dataset.set_transform(self._transform_train_batch)
